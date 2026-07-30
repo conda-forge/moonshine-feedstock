@@ -1,5 +1,5 @@
 context:
-  version: "0.14.1"
+  version: "0.14.3"
 
 package:
   name: moonshine
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://github.com/hgaiser/moonshine/archive/refs/tags/v${{ version }}.tar.gz
-  sha256: 60fc3636737e56adbb9cb652e2cfdd5f48cacccb980a46fa36833fce8183fb3b
+  sha256: 3b98caf529941d5c74e72f4177355861ed2f986c5cb270802dcbb5b28fe3d572
 
 build:
   number: 0

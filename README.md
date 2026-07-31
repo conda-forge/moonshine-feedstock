@@ -18,8 +18,19 @@ is required. It supports hardware H.264/H.265/AV1 encoding via Vulkan,
 HDR, surround-sound audio, and full mouse, keyboard, and gamepad input.
 
 The package also ships the Moonshine Vulkan WSI layer
-(share/vulkan/implicit_layer.d) and reference systemd/udev integration
-files (share/moonshine).
+(share/vulkan/implicit_layer.d) and a moonshine-steamos-setup helper for
+installing the systemd, udev, modules-load, sysusers, Vulkan, polkit, and
+atomic-update integration files needed on SteamOS.
+
+Install and configure it with:
+
+  pixi global install moonshine
+  moonshine-steamos-setup
+
+Remove the privileged integration before uninstalling the Pixi environment:
+
+  moonshine-steamos-setup --uninstall
+  pixi global uninstall moonshine
 
 Current build status
 ====================

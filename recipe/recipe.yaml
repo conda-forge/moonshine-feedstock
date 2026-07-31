@@ -10,7 +10,7 @@ source:
   sha256: 474922701d2364ab034b7ddfc129974246bf9fbe97854b93938d856c9aa25794
 
 build:
-  number: 0
+  number: 1
   skip:
     - not linux
   script:
@@ -29,9 +29,15 @@ build:
       sed 's|/usr/lib/moonshine/vulkan-layers/libmoonshine_wsi.so|../../../lib/moonshine/vulkan-layers/libmoonshine_wsi.so|' \
         dist/VkLayer_moonshine_wsi.json > VkLayer_moonshine_wsi.json
       install -Dm644 VkLayer_moonshine_wsi.json ${PREFIX}/share/vulkan/implicit_layer.d/VkLayer_moonshine_wsi.json
+      install -Dm755 "${RECIPE_DIR}/moonshine-steamos-setup.sh" ${PREFIX}/bin/moonshine-steamos-setup
+      install -Dm755 dist/start-moonshine.sh ${PREFIX}/share/moonshine/start-moonshine.sh
       install -Dm644 dist/moonshine@.service ${PREFIX}/share/moonshine/moonshine@.service
       install -Dm644 dist/60-moonshine.rules ${PREFIX}/share/moonshine/60-moonshine.rules
       install -Dm644 dist/moonshine-modules.conf ${PREFIX}/share/moonshine/moonshine-modules.conf
+      install -Dm644 dist/moonshine-sysusers.conf ${PREFIX}/share/moonshine/moonshine-sysusers.conf
+      install -Dm644 dist/50-moonshine-inhibit-sleep.rules ${PREFIX}/share/moonshine/50-moonshine-inhibit-sleep.rules
+      install -Dm644 dist/VkLayer_moonshine_wsi.json ${PREFIX}/share/moonshine/VkLayer_moonshine_wsi.json
+      install -Dm644 "${RECIPE_DIR}/moonshine-atomic-update.conf" ${PREFIX}/share/moonshine/moonshine-atomic-update.conf
       cargo-bundle-licenses --format yaml --output ./THIRDPARTY.yml
 
 requirements:
@@ -59,20 +65,62 @@ requirements:
     - libgbm
     - wayland
     - libxkbcommon
+  run:
+    - bash
 
 tests:
-  - script: moonshine --help
+  - script: |
+      moonshine --help
+      moonshine-steamos-setup --help
+      if [ "$(id -u)" -ne 0 ]; then
+        dry_run_output=$(moonshine-steamos-setup --dry-run --no-enable --no-start --no-linger)
+        printf '%s\n' "$dry_run_output" | grep -F "Prefix: ${CONDA_PREFIX}"
+        printf '%s\n' "$dry_run_output" | grep -F "Wrapper: /opt/moonshine-pixi/start-moonshine.sh"
+        printf '%s\n' "$dry_run_output" | grep -F "Moonshine binary: ${CONDA_PREFIX}/bin/moonshine"
+        printf '%s\n' "$dry_run_output" | grep -F "WSI library: ${CONDA_PREFIX}/lib/moonshine/vulkan-layers/libmoonshine_wsi.so"
+        printf '%s\n' "$dry_run_output" | grep -F "Vulkan manifest: /etc/vulkan/implicit_layer.d/VkLayer_moonshine_wsi.json"
+        printf '%s\n' "$dry_run_output" | grep -F "Templates: validated and rendered successfully"
+        printf '%s\n' "$dry_run_output" | grep -F "Enable service: false"
+        printf '%s\n' "$dry_run_output" | grep -F "Start service: false"
+        printf '%s\n' "$dry_run_output" | grep -F "sudo was not invoked"
+        uninstall_output=$(moonshine-steamos-setup --uninstall --dry-run)
+        printf '%s\n' "$uninstall_output" | grep -F "Stop and disable: moonshine@$(id -un).service"
+        printf '%s\n' "$uninstall_output" | grep -F "Preserve Pixi/Conda prefix: ${CONDA_PREFIX}"
+        printf '%s\n' "$uninstall_output" | grep -F "Preserve standalone installation: /opt/moonshine"
+        printf '%s\n' "$uninstall_output" | grep -F "Lingering: unchanged"
+        printf '%s\n' "$uninstall_output" | grep -F "sudo was not invoked"
+        if env -u CONDA_PREFIX moonshine-steamos-setup --dry-run --no-enable --no-start --no-linger; then
+          echo "setup unexpectedly accepted a missing CONDA_PREFIX" >&2
+          exit 1
+        fi
+        empty_prefix=$(mktemp -d)
+        if CONDA_PREFIX="$empty_prefix" moonshine-steamos-setup --dry-run --no-enable --no-start --no-linger; then
+          echo "setup unexpectedly accepted a prefix with missing assets" >&2
+          exit 1
+        fi
+        rm -rf "$empty_prefix"
+        if moonshine-steamos-setup --dry-run --user moonshine-user-that-does-not-exist; then
+          echo "setup unexpectedly accepted an invalid user" >&2
+          exit 1
+        fi
+      fi
   - package_contents:
       strict: true
       bin:
         - moonshine
+        - moonshine-steamos-setup
       files:
         exists:
           - lib/moonshine/vulkan-layers/libmoonshine_wsi.so
           - share/vulkan/implicit_layer.d/VkLayer_moonshine_wsi.json
+          - share/moonshine/50-moonshine-inhibit-sleep.rules
           - share/moonshine/60-moonshine.rules
+          - share/moonshine/VkLayer_moonshine_wsi.json
+          - share/moonshine/moonshine-atomic-update.conf
           - share/moonshine/moonshine-modules.conf
+          - share/moonshine/moonshine-sysusers.conf
           - share/moonshine/moonshine@.service
+          - share/moonshine/start-moonshine.sh
 
 about:
   homepage: https://github.com/hgaiser/moonshine
@@ -85,8 +133,19 @@ about:
     HDR, surround-sound audio, and full mouse, keyboard, and gamepad input.
 
     The package also ships the Moonshine Vulkan WSI layer
-    (share/vulkan/implicit_layer.d) and reference systemd/udev integration
-    files (share/moonshine).
+    (share/vulkan/implicit_layer.d) and a moonshine-steamos-setup helper for
+    installing the systemd, udev, modules-load, sysusers, Vulkan, polkit, and
+    atomic-update integration files needed on SteamOS.
+
+    Install and configure it with:
+
+      pixi global install moonshine
+      moonshine-steamos-setup
+
+    Remove the privileged integration before uninstalling the Pixi environment:
+
+      moonshine-steamos-setup --uninstall
+      pixi global uninstall moonshine
   license: BSD-2-Clause
   license_file:
     - LICENSE
